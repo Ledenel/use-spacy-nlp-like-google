@@ -44,12 +44,19 @@ word_info_schema = dict(
     span_end=NUMERIC(stored=True, sortable=True), 
     min_word_id=NUMERIC(stored=True, sortable=True), 
     max_word_id=NUMERIC(stored=True, sortable=True), 
-    word_id=TEXT(stored=True)
+    word_id=TEXT(stored=True),
+    is_max_depth=BOOLEAN(stored=True),
+    depth=NUMERIC(stored=True, sortable=True),
 )
+
+word_info_schema_numeric = {
+    name:field for name,field in word_info_schema.items() if isinstance(field, NUMERIC)
+}
 
 schema = Schema(
     **word_info_schema,
-    **{"head_%s" % k:v for k,v in word_info_schema.items()}
+    **{"head_%s" % k:v for k,v in word_info_schema.items()},
+    **{"head_relative_%s" % k:v for k,v in word_info_schema_numeric.items()},
 )
 
 # from whoosh.qparser import QueryParser
@@ -86,10 +93,27 @@ def get_words_info(_tokens):
     return {k:v for k,v in locals().items() if not k.startswith("_")}
 
 def get_composed_info(tokens):
+    word_infos = get_words_info(tokens)
+    head_info = get_words_info([get_head(tokens)])
     return {
-        **get_words_info(tokens),
-        **{"head_%s" % k:v for k,v in get_words_info([get_head(tokens)]).items()}
+        **word_infos,
+        **{"head_%s" % k:v for k,v in head_info.items()},
+        **{"head_relative_%s" % k:head - word_infos[k] for k,head in head_info.items() if k in word_info_schema_numeric},
     }
+
+def collect_closure(head: Token):
+    closure = set()
+    closure.add(head)
+    doc = head.doc
+    has_more = True
+    while has_more:
+        has_more = False
+        yield closure.copy()
+        for token in doc:
+            if token.head in closure and token not in closure:
+                closure.add(token)
+                has_more = True
+            
 
 from collections import defaultdict
 import spacy
@@ -111,7 +135,7 @@ def nlp():
         model="zh_core_web_sm",
         type="doc,word",
         query="type:doc",
-        text="假如你是李华，你已经给Tom写了一封信，来描述你在中国的生活。这是他的回信。"     
+        text="假如你是李华，你打算给Tom写了一封信，信中描述你在中国的生活。要求不少于200词。"     
     ), **request.args
     }
     params.setdefault("limit", len(params["text"]))
@@ -121,6 +145,17 @@ def nlp():
     writer.add_document(type="doc", **get_composed_info(list(doc)))
     for token in doc:
         writer.add_document(type="word", **get_composed_info([token]))
+        closures = list(enumerate(collect_closure(token)))
+        is_max_depth_items = [False for _ in closures]
+        is_max_depth_items[-1] = True
+        for (depth, closure), max_depth in zip(closures, is_max_depth_items):
+            writer.add_document(
+                type="closure",
+                **get_composed_info(list(closure)),
+                is_max_depth=max_depth,
+                depth=depth,
+            )
+
     writer.commit()
     with ix.searcher() as searcher:
         query = QueryParser("text", ix.schema).parse(params["query"])
