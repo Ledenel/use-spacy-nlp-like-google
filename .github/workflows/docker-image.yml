@@ -22,6 +22,9 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v2
       - uses: satackey/action-docker-layer-caching@v0.0.11
+        with:
+          key: docker-layer-caching-${{ github.workflow }}-${{ github.ref }}-{hash}
+          restore-keys: docker-layer-caching-${{ github.workflow }}-${{ github.ref }}-
         # Ignore the failure of a step and avoid terminating the job.
         continue-on-error: true
       - name: Push to Docker Hub
