@@ -158,7 +158,7 @@ class SearchingItem:
         self.attr_cache = attr_cache
         self.fields = fields
     
-    def new_search(graph, fields = {
+    def new_search(graph: nx.DiGraph, fields = {
         "search_len": True,
         "span_counts": True,
         "token_len": False,
@@ -169,7 +169,7 @@ class SearchingItem:
                 graph=graph,
                 head=node,
                 children=[],
-                search_list=list(graph.adj[head]),
+                search_list=list(graph.adj[node]),
                 attr_cache=attr_cache,
                 fields=fields,
             )
