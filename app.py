@@ -151,28 +151,34 @@ def nlp():
     }
     params.setdefault("limit", len(params["text"]))
     print("request done", perf_counter() - _st); _st = perf_counter()
-    ix = RamStorage().create_index(schema)
-    print("create schema", perf_counter() - _st); _st = perf_counter()
-    writer = ix.writer()
-    print("create writer", perf_counter() - _st); _st = perf_counter()
     doc = model_dict[params["model"]](params["text"])
     print("nlp parse done, to write", perf_counter() - _st); _st = perf_counter()
-    writer.add_document(type="doc", **get_composed_info(list(doc)))
+    search_items = []
+    search_items.append(dict(type="doc", **get_composed_info(list(doc))))
     for token in doc:
-        writer.add_document(type="word", **get_composed_info([token]))
+        search_items.append(dict(type="word", **get_composed_info([token])))
         closures = list(enumerate(collect_closure(token)))
         is_max_depth_items = [False for _ in closures]
         is_max_depth_items[-1] = True
         for (depth, closure), max_depth in zip(closures, is_max_depth_items):
-            writer.add_document(
+            search_items.append(dict(
                 type="closure",
                 **get_composed_info(list(closure)),
                 is_max_depth=max_depth,
                 depth=depth,
-            )
-    print("write done", perf_counter() - _st); _st = perf_counter()
+            ))
+    print("search items done", perf_counter() - _st); _st = perf_counter()
+    ix = RamStorage().create_index(schema)
+    print("create schema", perf_counter() - _st); _st = perf_counter()
+    writer = ix.writer()
+    print("create writer", perf_counter() - _st); _st = perf_counter()
+    for item in search_items:
+        writer.add_document(**item)
+    print("add document to memory", perf_counter() - _st); _st = perf_counter()
     writer.commit()
-    print("in memory", perf_counter() - _st); _st = perf_counter()
+    print("commited", perf_counter() - _st); _st = perf_counter()
+    print("now doc", ix.doc_count_all())
+    
     with ix.searcher() as searcher:
         query = QueryParser("text", ix.schema).parse(params["query"])
         results = searcher.search(query, limit=params["limit"])
