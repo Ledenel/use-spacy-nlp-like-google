@@ -184,7 +184,10 @@ class SearchingItem:
                 pass
             else:
                 return self.attr[field] < other.attr[field] if ascending else self.attr[field] > other.attr[field]
+        return False
 
+    def __eq__(self, other):
+        return [self.attr[field] for field in self.fields] == [other.attr[field] for field in self.fields]
 
 
 @app.route('/', methods=['GET'])
