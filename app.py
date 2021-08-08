@@ -160,7 +160,8 @@ class SearchingItem:
         self.attr_cache = attr_cache
         self.fields = fields
     
-    def new_search(graph: nx.DiGraph, fields = {
+    @classmethod
+    def new_search(cls, graph: nx.DiGraph, fields = {
         "search_len": True,
         "span_counts": True,
         "token_len": False,
@@ -182,7 +183,6 @@ class SearchingItem:
             yield SearchingItem(self.graph, self.head, self.children + [first], rest + list(self.graph.adj[first]), self.attr_cache, self.fields)
             yield SearchingItem(self.graph, self.head, self.children, rest, self.attr_cache, self.fields)
 
-
     @property
     def attr(self):
         result = self.attr_cache.get(self.children_key, None)
@@ -203,6 +203,26 @@ class SearchingItem:
     def __eq__(self, other):
         return [self.attr[field] for field in self.fields] == [other.attr[field] for field in self.fields]
 
+from queue import PriorityQueue
+
+def search_subtrees(doc):
+    graph = nx.DiGraph()
+    for token in doc:
+        if token.head != token:
+            graph.add_edge(token.head, token)
+
+    queue = PriorityQueue()
+    for item in SearchingItem.new_search(graph):
+        queue.put(item)
+    
+    while queue:
+        item = queue.get()
+        if not item.search_list:
+            yield item
+        for sub_item in item.expand():
+            queue.put(sub_item)
+        
+    
 
 @app.route('/', methods=['GET'])
 def nlp():
