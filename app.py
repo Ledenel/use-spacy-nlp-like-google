@@ -145,6 +145,29 @@ def get_all_fields(query):
     for child in query.children():
         yield from get_all_fields(child)
 
+from functools import total_ordering
+
+@total_ordering
+class SearchingItem:
+    def __init__(self, head, children, search_list, attr_cache, fields={
+        
+    }):
+        self.head = head
+        self.children = children
+        self.search_list = search_list
+        self.attr_cache = attr_cache
+        self.fields = fields
+    
+    def expand():
+        pass
+
+    @property
+    def attr():
+        pass
+    
+    def __lt__(self, other):
+        pass
+
 @app.route('/', methods=['GET'])
 def nlp():
     _st = perf_counter()
