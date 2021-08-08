@@ -48,6 +48,8 @@ word_info_schema = dict(
     min_word_id=NUMERIC(sortable=True), 
     max_word_id=NUMERIC(sortable=True), 
     word_id=TEXT(),
+    contains_ascii=BOOLEAN(),
+    contains_punct=BOOLEAN(),
     is_max_depth=BOOLEAN(),
     depth=NUMERIC(sortable=True),
 )
@@ -97,6 +99,8 @@ def get_words_info(_tokens):
     min_word_id = min(_token.i for _token in _sorted_tokens)
     max_word_id = max(_token.i for _token in _sorted_tokens)
     word_id = " ".join([str(_token.i) for _token in _sorted_tokens])
+    contains_ascii = any(ch.isascii() for _token in _sorted_tokens for ch in _token.text)
+    contains_punct = any(_token.is_punct for _token in _sorted_tokens)
     return {k:v for k,v in locals().items() if not k.startswith("_")}
 
 def get_composed_info(tokens, head=None):
@@ -252,11 +256,13 @@ def nlp():
         type="doc,word",
         query="type:doc",
         text="假如你是李华，你打算给Tom写一封信，信中描述你在中国的生活。要求不少于200词。",
+        text_only="no",
         subtree_limit="500",    
     ), **request.args
     }
     params.setdefault("limit", len(params["text"]))
     params["subtree_limit"] = int(params["subtree_limit"])
+    params["text_only"] = params["text_only"] == "yes"
     print("request done", perf_counter() - _st); _st = perf_counter()
     doc = model_dict[params["model"]](params["text"])
     print("nlp parse done, to write", perf_counter() - _st); _st = perf_counter()
@@ -303,7 +309,10 @@ def nlp():
         query = QueryParser("text", ix.schema).parse(params["query"])
         results = searcher.search(query, limit=params["limit"])
         print("search done", perf_counter() - _st); _st = perf_counter()
-        return jsonify([search_items[hit["id"]] for hit in results])
+        search_items_result = [search_items[hit["id"]] for hit in results]
+        if params["text_only"]:
+            search_items_result = [item["text"].replace(" ", "") for item in search_items_result]
+        return jsonify(search_items_result)
 
 
 
