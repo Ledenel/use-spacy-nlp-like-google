@@ -92,7 +92,7 @@ def get_words_info(_tokens):
     span_start = min(_token.idx for _token in _sorted_tokens)
     span_end = max(_token.idx + len(_token.text) for _token in _sorted_tokens)
     span_len = span_end - span_start
-    _span_changed = [right is not None and left.idx+len(left.text) != right.idx for left, right in zip(_sorted_tokens, _sorted_tokens[1:] + [None])]
+    _span_changed = (right is not None and left.idx+len(left.text) != right.idx for left, right in zip(_sorted_tokens, _sorted_tokens[1:] + [None]))
     span_count = sum(_span_changed) + 1
     min_word_id = min(_token.i for _token in _sorted_tokens)
     max_word_id = max(_token.i for _token in _sorted_tokens)
@@ -139,6 +139,12 @@ model_dict["zh_core_web_sm"]
 from tqdm import tqdm
 from time import perf_counter
 
+def get_all_fields(query):
+    if query.field() is not None:
+        yield query.field()
+    for child in query.children():
+        yield from get_all_fields(child)
+
 @app.route('/', methods=['GET'])
 def nlp():
     _st = perf_counter()
@@ -168,12 +174,17 @@ def nlp():
                 depth=depth,
             ))
     print("search items done", perf_counter() - _st); _st = perf_counter()
-    ix = RamStorage().create_index(schema)
+    pre_query = QueryParser("text", schema).parse(params["query"])
+    fields = list(get_all_fields(pre_query))
+    final_schema = {k:schema[k] for k in fields}
+    final_schema["id"] = STORED()
+    final_schema = Schema(**final_schema)
+    ix = RamStorage().create_index(final_schema)
     print("create schema", perf_counter() - _st); _st = perf_counter()
     writer = ix.writer()
     print("create writer", perf_counter() - _st); _st = perf_counter()
-    for item in search_items:
-        writer.add_document(**item)
+    for i, item in enumerate(search_items):
+        writer.add_document(id=i, **{k:item[k] for k in fields})
     print("add document to memory", perf_counter() - _st); _st = perf_counter()
     writer.commit()
     print("commited", perf_counter() - _st); _st = perf_counter()
@@ -181,10 +192,9 @@ def nlp():
     
     with ix.searcher() as searcher:
         query = QueryParser("text", ix.schema).parse(params["query"])
-        print([x.field() for x in query.children()])
         results = searcher.search(query, limit=params["limit"])
         print("search done", perf_counter() - _st); _st = perf_counter()
-        return jsonify([hit.fields() for hit in results])
+        return jsonify([search_items[hit["id"]] for hit in results])
     
 
 
