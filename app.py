@@ -39,9 +39,12 @@ word_info_schema = dict(
     token_len=NUMERIC(stored=True, sortable=True),
     pos=TEXT(stored=True), 
     pos_tag=TEXT(stored=True), 
+    dep=TEXT(stored=True), 
     text_with_pos=TEXT(stored=True), 
     span_start=NUMERIC(stored=True, sortable=True), 
     span_end=NUMERIC(stored=True, sortable=True), 
+    span_len=NUMERIC(stored=True, sortable=True), 
+    span_count=NUMERIC(stored=True, sortable=True), 
     min_word_id=NUMERIC(stored=True, sortable=True), 
     max_word_id=NUMERIC(stored=True, sortable=True), 
     word_id=TEXT(stored=True),
@@ -82,11 +85,15 @@ def get_words_info(_tokens):
     text_len=sum(len(_x) for _x in text)
     token_len=len(text)
     text=" ".join(text)
-    pos= " ".join([_token.pos_ for _token in _sorted_tokens])
+    pos=" ".join([_token.pos_ for _token in _sorted_tokens])
+    dep=" ".join([_token.dep_ for _token in _sorted_tokens])
     text_with_pos = " ".join([_text for _token in _sorted_tokens for _text in [_token.text, _token.pos_]])
     pos_tag= " ".join([_token.tag_ for _token in _sorted_tokens])
     span_start = min(_token.idx for _token in _sorted_tokens)
     span_end = max(_token.idx + len(_token.text) for _token in _sorted_tokens)
+    span_len = span_end - span_start
+    _span_changed = [right is not None and left.idx+len(left.text) != right.idx for left, right in zip(_sorted_tokens, _sorted_tokens[1:] + [None])]
+    span_count = sum(_span_changed) + 1
     min_word_id = min(_token.i for _token in _sorted_tokens)
     max_word_id = max(_token.i for _token in _sorted_tokens)
     word_id = " ".join([str(_token.i) for _token in _sorted_tokens])
@@ -129,19 +136,27 @@ class keydefaultdict(defaultdict):
 model_dict = keydefaultdict(spacy.load)
 model_dict["zh_core_web_sm"]
 
+from tqdm import tqdm
+from time import perf_counter
+
 @app.route('/', methods=['GET'])
 def nlp():
+    _st = perf_counter()
     params = {**dict(
         model="zh_core_web_sm",
         type="doc,word",
         query="type:doc",
-        text="假如你是李华，你打算给Tom写了一封信，信中描述你在中国的生活。要求不少于200词。"     
+        text="假如你是李华，你打算给Tom写一封信，信中描述你在中国的生活。要求不少于200词。"     
     ), **request.args
     }
     params.setdefault("limit", len(params["text"]))
+    print("request done", perf_counter() - _st); _st = perf_counter()
     ix = RamStorage().create_index(schema)
+    print("create schema", perf_counter() - _st); _st = perf_counter()
     writer = ix.writer()
+    print("create writer", perf_counter() - _st); _st = perf_counter()
     doc = model_dict[params["model"]](params["text"])
+    print("nlp parse done, to write", perf_counter() - _st); _st = perf_counter()
     writer.add_document(type="doc", **get_composed_info(list(doc)))
     for token in doc:
         writer.add_document(type="word", **get_composed_info([token]))
@@ -155,12 +170,15 @@ def nlp():
                 is_max_depth=max_depth,
                 depth=depth,
             )
-
+    print("write done", perf_counter() - _st); _st = perf_counter()
     writer.commit()
+    print("in memory", perf_counter() - _st); _st = perf_counter()
     with ix.searcher() as searcher:
         query = QueryParser("text", ix.schema).parse(params["query"])
         results = searcher.search(query, limit=params["limit"])
+        print("search done", perf_counter() - _st); _st = perf_counter()
         return jsonify([hit.fields() for hit in results])
+    
 
 
     
