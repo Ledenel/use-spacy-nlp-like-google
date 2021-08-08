@@ -147,6 +147,8 @@ def get_all_fields(query):
 
 from functools import total_ordering
 
+import networkx as nx
+
 @total_ordering
 class SearchingItem:
     def __init__(self, graph, head, children, search_list, attr_cache, fields):
