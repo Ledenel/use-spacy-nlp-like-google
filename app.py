@@ -149,9 +149,12 @@ from functools import total_ordering
 
 @total_ordering
 class SearchingItem:
-    def __init__(self, head, children, search_list, attr_cache, fields={
-        
+    def __init__(self, graph, head, children, search_list, attr_cache, fields={
+        "search_len": True,
+        "span_counts": True,
+        "token_len": True,
     }):
+        self.graph = graph
         self.head = head
         self.children = list(children)
         self.children_key = frozenset(t.i for t in children)
@@ -160,7 +163,11 @@ class SearchingItem:
         self.fields = fields
     
     def expand(self):
-        pass
+        if self.search_list:
+            first, *rest = self.search_list
+            yield SearchingItem(self.graph, self.head, self.children + [first], rest + list(self.graph.adj[first].nodes), self.attr_cache, self.fields)
+            yield SearchingItem(self.graph, self.head, self.children, rest, self.attr_cache, self.fields)
+               
 
     @property
     def attr(self):
