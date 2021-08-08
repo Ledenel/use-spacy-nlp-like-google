@@ -153,7 +153,8 @@ class SearchingItem:
         
     }):
         self.head = head
-        self.children = children
+        self.children = list(children)
+        self.children_key = frozenset(t.i for t in children)
         self.search_list = search_list
         self.attr_cache = attr_cache
         self.fields = fields
@@ -163,7 +164,12 @@ class SearchingItem:
 
     @property
     def attr(self):
-        pass
+        result = self.attr_cache.get(self.children_key, None)
+        if result is None:
+            result = get_composed_info(self.children)
+            result["search_len"] = len(self.search_list)
+            self.attr_cache[self.children_key] = result
+        return result
     
     def __lt__(self, other):
         pass
@@ -218,12 +224,10 @@ def nlp():
         results = searcher.search(query, limit=params["limit"])
         print("search done", perf_counter() - _st); _st = perf_counter()
         return jsonify([search_items[hit["id"]] for hit in results])
-    
 
 
-    
 
-    
+
 
 import os
 if "FLASK_DEBUG" in os.environ and str(os.environ["FLASK_DEBUG"]) == "1":
