@@ -152,7 +152,7 @@ class SearchingItem:
     def __init__(self, graph, head, children, search_list, attr_cache, fields={
         "search_len": True,
         "span_counts": True,
-        "token_len": True,
+        "token_len": False,
     }):
         self.graph = graph
         self.head = head
@@ -167,7 +167,7 @@ class SearchingItem:
             first, *rest = self.search_list
             yield SearchingItem(self.graph, self.head, self.children + [first], rest + list(self.graph.adj[first].nodes), self.attr_cache, self.fields)
             yield SearchingItem(self.graph, self.head, self.children, rest, self.attr_cache, self.fields)
-               
+
 
     @property
     def attr(self):
@@ -179,7 +179,13 @@ class SearchingItem:
         return result
     
     def __lt__(self, other):
-        pass
+        for field, ascending in self.fields.items():
+            if self.attr[field] == other.attr[field]:
+                pass
+            else:
+                return self.attr[field] < other.attr[field] if ascending else self.attr[field] > other.attr[field]
+
+
 
 @app.route('/', methods=['GET'])
 def nlp():
