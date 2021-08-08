@@ -158,11 +158,11 @@ class SearchingItem:
         self.attr_cache = attr_cache
         self.fields = fields
     
-    def expand():
+    def expand(self):
         pass
 
     @property
-    def attr():
+    def attr(self):
         pass
     
     def __lt__(self, other):
