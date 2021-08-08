@@ -99,9 +99,11 @@ def get_words_info(_tokens):
     word_id = " ".join([str(_token.i) for _token in _sorted_tokens])
     return {k:v for k,v in locals().items() if not k.startswith("_")}
 
-def get_composed_info(tokens):
+def get_composed_info(tokens, head=None):
     word_infos = get_words_info(tokens)
-    head_info = get_words_info([get_head(tokens)])
+    if head is None:
+        head = get_head(tokens)
+    head_info = get_words_info([head])
     return {
         **word_infos,
         **{"head_%s" % k:v for k,v in head_info.items()},
@@ -151,12 +153,13 @@ import networkx as nx
 
 @total_ordering
 class SearchingItem:
-    def __init__(self, graph, head, children, search_list, attr_cache, fields):
+    def __init__(self, graph, head, children, search_list, unsearched_list, attr_cache, fields):
         self.graph = graph
         self.head = head
         self.children = list(children)
         self.children_key = frozenset(t.i for t in children)
         self.search_list = search_list
+        self.unsearched_list = unsearched_list
         self.attr_cache = attr_cache
         self.fields = fields
     
@@ -173,6 +176,7 @@ class SearchingItem:
                 head=node,
                 children=[node],
                 search_list=list(graph.adj[node]),
+                unsearched_list=[],
                 attr_cache=attr_cache,
                 fields=fields,
             )
@@ -180,14 +184,30 @@ class SearchingItem:
     def expand(self):
         if self.search_list:
             first, *rest = self.search_list
-            yield SearchingItem(self.graph, self.head, self.children + [first], rest + list(self.graph.adj[first]), self.attr_cache, self.fields)
-            yield SearchingItem(self.graph, self.head, self.children, rest, self.attr_cache, self.fields)
+            yield SearchingItem(
+                self.graph, 
+                self.head,
+                self.children + [first], 
+                rest + list(self.graph.adj[first]),
+                self.unsearched_list, 
+                self.attr_cache, 
+                self.fields,
+            )
+            yield SearchingItem(
+                self.graph, 
+                self.head, 
+                self.children, 
+                rest, 
+                self.unsearched_list + [first], 
+                self.attr_cache, 
+                self.fields,
+            )
 
     @property
     def attr(self):
         result = self.attr_cache.get(self.children_key, None)
         if result is None:
-            result = get_composed_info(self.children)
+            result = get_composed_info(self.children, self.head)
             result["search_len"] = len(self.search_list)
             self.attr_cache[self.children_key] = result
         return result
@@ -218,7 +238,7 @@ def search_subtrees(doc):
     while queue:
         item = queue.get()
         if not item.search_list:
-            yield item.children
+            yield item
         for sub_item in item.expand():
             queue.put(sub_item)
         
@@ -231,10 +251,12 @@ def nlp():
         model="zh_core_web_sm",
         type="doc,word",
         query="type:doc",
-        text="假如你是李华，你打算给Tom写一封信，信中描述你在中国的生活。要求不少于200词。"     
+        text="假如你是李华，你打算给Tom写一封信，信中描述你在中国的生活。要求不少于200词。",
+        subtree_limit="500",    
     ), **request.args
     }
     params.setdefault("limit", len(params["text"]))
+    params["subtree_limit"] = int(params["subtree_limit"])
     print("request done", perf_counter() - _st); _st = perf_counter()
     doc = model_dict[params["model"]](params["text"])
     print("nlp parse done, to write", perf_counter() - _st); _st = perf_counter()
@@ -242,29 +264,36 @@ def nlp():
     search_items.append(dict(type="doc", **get_composed_info(list(doc))))
     for token in doc:
         search_items.append(dict(type="word", **get_composed_info([token])))
-        closures = list(enumerate(collect_closure(token)))
-        is_max_depth_items = [False for _ in closures]
-        is_max_depth_items[-1] = True
-        for (depth, closure), max_depth in zip(closures, is_max_depth_items):
-            search_items.append(dict(
-                type="closure",
-                **get_composed_info(list(closure)),
-                is_max_depth=max_depth,
-                depth=depth,
-            ))
-    # print(list(zip(search_subtrees(doc), range(1500))))
+        # closures = list(enumerate(collect_closure(token)))
+        # is_max_depth_items = [False for _ in closures]
+        # is_max_depth_items[-1] = True
+        # for (depth, closure), max_depth in zip(closures, is_max_depth_items):
+        #     search_items.append(dict(
+        #         type="closure",
+        #         **get_composed_info(list(closure)),
+        #         is_max_depth=max_depth,
+        #         depth=depth,
+        #     ))
+    for subtree_item, _ in zip(search_subtrees(doc), range(500)):
+        search_items.append(dict(
+            type="subtree",
+            **subtree_item.attr,
+            is_max_depth=not subtree_item.unsearched_list,
+        ))
+    list(zip(search_subtrees(doc), range(500)))
     print("search items done", perf_counter() - _st); _st = perf_counter()
     pre_query = QueryParser("text", schema).parse(params["query"])
     fields = list(get_all_fields(pre_query))
     final_schema = {k:schema[k] for k in fields}
     final_schema["id"] = STORED()
     final_schema = Schema(**final_schema)
+    print(final_schema)
     ix = RamStorage().create_index(final_schema)
     print("create schema", perf_counter() - _st); _st = perf_counter()
     writer = ix.writer()
     print("create writer", perf_counter() - _st); _st = perf_counter()
     for i, item in enumerate(search_items):
-        writer.add_document(id=i, **{k:item[k] for k in fields})
+        writer.add_document(id=i, **{k:item[k] for k in fields if k in item})
     print("add document to memory", perf_counter() - _st); _st = perf_counter()
     writer.commit()
     print("commited", perf_counter() - _st); _st = perf_counter()
