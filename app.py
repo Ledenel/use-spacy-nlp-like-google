@@ -163,7 +163,7 @@ class SearchingItem:
     @classmethod
     def new_search(cls, graph: nx.DiGraph, fields = {
         "search_len": True,
-        "span_counts": True,
+        "span_count": True,
         "token_len": False,
     }):
         attr_cache={}
@@ -217,9 +217,8 @@ def search_subtrees(doc):
     
     while queue:
         item = queue.get()
-        print("searching", item.children)
         if not item.search_list:
-            yield item
+            yield item.children
         for sub_item in item.expand():
             queue.put(sub_item)
         
@@ -253,7 +252,7 @@ def nlp():
                 is_max_depth=max_depth,
                 depth=depth,
             ))
-    # print(list(search_subtrees(doc)))
+    # print(list(zip(search_subtrees(doc), range(1500))))
     print("search items done", perf_counter() - _st); _st = perf_counter()
     pre_query = QueryParser("text", schema).parse(params["query"])
     fields = list(get_all_fields(pre_query))
