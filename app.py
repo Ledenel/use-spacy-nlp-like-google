@@ -181,6 +181,7 @@ def nlp():
     
     with ix.searcher() as searcher:
         query = QueryParser("text", ix.schema).parse(params["query"])
+        print([x.field() for x in query.children()])
         results = searcher.search(query, limit=params["limit"])
         print("search done", perf_counter() - _st); _st = perf_counter()
         return jsonify([hit.fields() for hit in results])
