@@ -171,7 +171,7 @@ class SearchingItem:
             yield SearchingItem(
                 graph=graph,
                 head=node,
-                children=[],
+                children=[node],
                 search_list=list(graph.adj[node]),
                 attr_cache=attr_cache,
                 fields=fields,
@@ -217,6 +217,7 @@ def search_subtrees(doc):
     
     while queue:
         item = queue.get()
+        print("searching", item.children)
         if not item.search_list:
             yield item
         for sub_item in item.expand():
@@ -252,6 +253,7 @@ def nlp():
                 is_max_depth=max_depth,
                 depth=depth,
             ))
+    # print(list(search_subtrees(doc)))
     print("search items done", perf_counter() - _st); _st = perf_counter()
     pre_query = QueryParser("text", schema).parse(params["query"])
     fields = list(get_all_fields(pre_query))
