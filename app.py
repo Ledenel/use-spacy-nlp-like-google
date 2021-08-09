@@ -256,12 +256,12 @@ def nlp():
         text="假如你是李华，你打算给Tom写一封信，信中描述你在中国的生活。要求不少于200词。",
         text_only="no",
         subtree_limit="500",    
-    ), **request.args
+    ), **request.args, **request.form
     }
     params.setdefault("limit", len(params["text"]))
     params["subtree_limit"] = int(params["subtree_limit"])
     params["text_only"] = params["text_only"] == "yes"
-    print("request done", perf_counter() - _st); _st = perf_counter()
+    print("request done", params["query"], perf_counter() - _st); _st = perf_counter()
     doc = model_dict[params["model"]](params["text"])
     print("nlp parse done, to write", perf_counter() - _st); _st = perf_counter()
     search_items = []
