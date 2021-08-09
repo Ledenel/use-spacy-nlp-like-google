@@ -234,17 +234,15 @@ def search_subtrees(doc):
     for token in doc:
         if token.head != token:
             graph.add_edge(token.head, token)
-
     queue = PriorityQueue()
     for item in SearchingItem.new_search(graph):
-        queue.put(item)
-    
-    while queue:
-        item = queue.get()
+        queue.put(item, block=False)
+    while not queue.empty():
+        item = queue.get(block=False)
         if not item.search_list:
             yield item
         for sub_item in item.expand():
-            queue.put(sub_item)
+            queue.put(sub_item, block=False)
         
     
 
@@ -280,13 +278,13 @@ def nlp():
         #         is_max_depth=max_depth,
         #         depth=depth,
         #     ))
+    print("adding subtrees", perf_counter() - _st); _st = perf_counter()
     for subtree_item, _ in zip(search_subtrees(doc), range(500)):
         search_items.append(dict(
             type="subtree",
             **subtree_item.attr,
             is_max_depth=not subtree_item.unsearched_list,
         ))
-    list(zip(search_subtrees(doc), range(500)))
     print("search items done", perf_counter() - _st); _st = perf_counter()
     pre_query = QueryParser("text", schema).parse(params["query"])
     fields = list(get_all_fields(pre_query))
