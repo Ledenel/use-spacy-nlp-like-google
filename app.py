@@ -40,6 +40,7 @@ word_info_schema = dict(
     pos=TEXT(), 
     pos_tag=TEXT(), 
     dep=TEXT(), 
+    dep_edge=TEXT(),
     text_with_pos=TEXT(), 
     span_start=NUMERIC(sortable=True), 
     span_end=NUMERIC(sortable=True), 
@@ -89,6 +90,7 @@ def get_words_info(_tokens):
     text=" ".join(text)
     pos=" ".join([_token.pos_ for _token in _sorted_tokens])
     dep=" ".join([_token.dep_ for _token in _sorted_tokens])
+    dep_edge= " ".join([str(_token.head.i) for _token in _sorted_tokens])
     text_with_pos = " ".join([_text for _token in _sorted_tokens for _text in [_token.text, _token.pos_]])
     pos_tag= " ".join([_token.tag_ for _token in _sorted_tokens])
     span_start = min(_token.idx for _token in _sorted_tokens)
@@ -157,9 +159,10 @@ import networkx as nx
 
 @total_ordering
 class SearchingItem:
-    def __init__(self, graph, head, children, search_list, unsearched_list, attr_cache, fields):
+    def __init__(self, graph, head, depth, children, search_list, unsearched_list, attr_cache, fields):
         self.graph = graph
         self.head = head
+        self.depth = depth
         self.children = list(children)
         self.children_key = frozenset(t.i for t in children)
         self.search_list = search_list
@@ -178,8 +181,9 @@ class SearchingItem:
             yield SearchingItem(
                 graph=graph,
                 head=node,
+                depth=1,
                 children=[node],
-                search_list=list(graph.adj[node]),
+                search_list=[(2, n) for n in graph.adj[node]],
                 unsearched_list=[],
                 attr_cache=attr_cache,
                 fields=fields,
@@ -188,11 +192,13 @@ class SearchingItem:
     def expand(self):
         if self.search_list:
             first, *rest = self.search_list
+            searching_depth, first_node = first
             yield SearchingItem(
                 self.graph, 
                 self.head,
-                self.children + [first], 
-                rest + list(self.graph.adj[first]),
+                max(self.depth, searching_depth),
+                self.children + [first_node], 
+                rest + [(searching_depth + 1, n) for n in self.graph.adj[first_node]],
                 self.unsearched_list, 
                 self.attr_cache, 
                 self.fields,
@@ -200,6 +206,7 @@ class SearchingItem:
             yield SearchingItem(
                 self.graph, 
                 self.head, 
+                self.depth,
                 self.children, 
                 rest, 
                 self.unsearched_list + [first], 
@@ -286,6 +293,7 @@ def nlp():
             type="subtree",
             **subtree_item.attr,
             is_max_depth=not subtree_item.unsearched_list,
+            depth=subtree_item.depth
         ))
     print("search items done", perf_counter() - _st); _st = perf_counter()
     pre_query = QueryParser("text", schema).parse(params["query"])
