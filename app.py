@@ -313,9 +313,9 @@ def nlp():
         if params["text_only"]:
             search_items_result = [item["text"] for item in search_items_result]
             if params["word_mode"]:
-                search_items_result = [t.replace(" ", "") for t in search_items_result]
-            else:
                 search_items_result = [t.split(" ") for t in search_items_result]
+            else:
+                search_items_result = [t.replace(" ", "") for t in search_items_result]
         return jsonify(search_items_result)
 
 
