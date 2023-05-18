@@ -1,5 +1,14 @@
-# python-zh-nlp
-a docker image for python chinese nlp, packaged with common models from spacy
+# use-spacy-nlp-like-google
+
+this project is aimed to integrate spacy nlp service like dependency analysis, named entity recognition, part-of-speech analysis into whoosh, 
+
+a traditional search engine written in pure python, 
+
+to make people write direct, super easy code to query, match, extract and manipulate nlp parts like an expert.
+
+you can think it as regular-expression with nlp enhanced.
+
+It is shipped with a docker image, packaged with common models from spacy.
 
 ## Usage
 
